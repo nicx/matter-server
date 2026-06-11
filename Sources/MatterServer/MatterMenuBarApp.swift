@@ -93,11 +93,14 @@ struct MenuBarLabel: View {
     }
 
     private var symbolName: String {
+        // Mesh of connected nodes — echoes the Matter logo, clearly distinct
+        // from the house/HomeKit glyph. Status via filled vs. outline, with a
+        // dedicated alert glyph for crashes.
         switch server.status {
-        case .running: return "house.fill"
-        case .starting, .stopping: return "house"
-        case .crashed: return "house.slash"
-        case .stopped: return "house.slash"
+        case .running: return "point.3.filled.connected.trianglepath.dotted"
+        case .starting, .stopping: return "point.3.connected.trianglepath.dotted"
+        case .stopped: return "point.3.connected.trianglepath.dotted"
+        case .crashed: return "exclamationmark.triangle.fill"
         }
     }
 }
