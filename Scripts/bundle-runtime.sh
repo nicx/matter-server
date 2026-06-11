@@ -94,4 +94,13 @@ rm -f "$RUNTIME/node/bin/npm" "$RUNTIME/node/bin/npx" "$RUNTIME/node/bin/corepac
 find "$RUNTIME/server/node_modules" -type f \
   \( -name '*.map' -o -name '*.d.ts' -o -name '*.d.ts.map' -o -name '*.ts' \) -delete 2>/dev/null || true
 
+# Build-time-only frontend libraries of the dashboard. The dashboard ships a
+# self-contained browser bundle (@matter-server/dashboard/dist/web) that already
+# inlines these; the server serves that bundle and never loads these packages at
+# runtime. Removing them saves ~45 MB. (Verified: no server-executed code imports
+# vis-network/@mdi/@material.)
+for dep in vis-network vis-data vis-util @mdi @material; do
+  rm -rf "$RUNTIME/server/node_modules/$dep"
+done
+
 echo "==> Done. Runtime is at $RUNTIME ($(du -sh "$RUNTIME" | cut -f1))"
