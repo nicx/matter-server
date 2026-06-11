@@ -37,15 +37,14 @@ final class AppSettings: ObservableObject {
     static let logLevels = ["critical", "error", "warning", "info", "debug", "verbose"]
 
     private init() {
-        let support = AppSettings.defaultSupportDirectory()
         port = (defaults.object(forKey: Keys.port) as? Int) ?? 5580
-        storagePath = (defaults.string(forKey: Keys.storagePath)) ?? support.appendingPathComponent("storage").path
+        storagePath = (defaults.string(forKey: Keys.storagePath)) ?? AppSettings.defaultStoragePath
         primaryInterface = (defaults.string(forKey: Keys.primaryInterface)) ?? ""
         bluetoothAdapter = (defaults.string(forKey: Keys.bluetoothAdapter)) ?? ""
         logLevel = (defaults.string(forKey: Keys.logLevel)) ?? "info"
         autoRestart = (defaults.object(forKey: Keys.autoRestart) as? Bool) ?? true
 
-        backupDirectory = (defaults.string(forKey: Keys.backupDirectory)) ?? support.appendingPathComponent("backups").path
+        backupDirectory = (defaults.string(forKey: Keys.backupDirectory)) ?? AppSettings.defaultBackupDirectory
         backupEnabled = (defaults.object(forKey: Keys.backupEnabled) as? Bool) ?? true
         backupHour = (defaults.object(forKey: Keys.backupHour) as? Int) ?? 3
         backupMinute = (defaults.object(forKey: Keys.backupMinute) as? Int) ?? 0
@@ -61,6 +60,21 @@ final class AppSettings: ObservableObject {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
         return base.appendingPathComponent("MatterServer", isDirectory: true)
+    }
+
+    /// Single source of truth for the default locations, also used by the reset
+    /// action so the UI and `init` never drift apart.
+    static var defaultStoragePath: String {
+        defaultSupportDirectory().appendingPathComponent("storage").path
+    }
+    static var defaultBackupDirectory: String {
+        defaultSupportDirectory().appendingPathComponent("backups").path
+    }
+
+    var storagePathIsDefault: Bool { storagePath == AppSettings.defaultStoragePath }
+
+    func resetStoragePathToDefault() {
+        storagePath = AppSettings.defaultStoragePath
     }
 
     private enum Keys {

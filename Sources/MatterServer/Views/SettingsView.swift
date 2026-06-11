@@ -24,29 +24,51 @@ private struct ServerSettingsTab: View {
 
     var body: some View {
         Form {
-            TextField("Port", value: $settings.port, format: .number.grouping(.never))
+            Section {
+                TextField("Port", value: $settings.port, format: .number.grouping(.never))
 
-            LabeledContent("Storage path") {
-                PathChooser(path: $settings.storagePath, chooseDirectory: true)
+                Picker("Log level", selection: $settings.logLevel) {
+                    ForEach(AppSettings.logLevels, id: \.self) { Text($0) }
+                }
+
+                Toggle("Auto-restart on crash", isOn: $settings.autoRestart)
             }
 
-            TextField("Primary interface", text: $settings.primaryInterface,
-                      prompt: Text("e.g. en0 — leave empty for all"))
+            Section {
+                LabeledContent("Server storage") {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        PathChooser(path: $settings.storagePath, chooseDirectory: true)
+                        if !settings.storagePathIsDefault {
+                            Button("Reset to default") { settings.resetStoragePathToDefault() }
+                                .controlSize(.small)
+                        }
+                    }
+                }
 
-            Picker("Log level", selection: $settings.logLevel) {
-                ForEach(AppSettings.logLevels, id: \.self) { Text($0) }
+                if settings.storagePath == settings.backupDirectory {
+                    Label("Storage and backup folder should differ.", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                TextField("Primary interface", text: $settings.primaryInterface,
+                          prompt: Text("e.g. en0 — leave empty for all"))
+
+                TextField("Bluetooth adapter (HCI id)", text: $settings.bluetoothAdapter,
+                          prompt: Text("empty = off — usually N/A on macOS"))
+            } header: {
+                Text("Advanced")
+            } footer: {
+                Text("Storage holds the controller's fabric keys, commissioned nodes and certificates. Most users never change this; changing it does not move existing data.")
             }
 
-            TextField("Bluetooth adapter (HCI id)", text: $settings.bluetoothAdapter,
-                      prompt: Text("empty = off — usually N/A on macOS"))
-            Toggle("Auto-restart on crash", isOn: $settings.autoRestart)
-
-            Divider()
-            HStack {
-                Text("Changes apply on next start.").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button("Apply & Restart") { server.restart() }
-                    .disabled(!server.status.isActive)
+            Section {
+                HStack {
+                    Text("Changes apply on next start.").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Apply & Restart") { server.restart() }
+                        .disabled(!server.status.isActive)
+                }
             }
         }
         .formStyle(.grouped)
