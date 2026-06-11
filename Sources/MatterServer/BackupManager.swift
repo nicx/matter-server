@@ -202,8 +202,11 @@ final class BackupManager: ObservableObject {
     }
 
     private func waitUntilStopped(timeout: TimeInterval) async {
+        // Wait for the process to actually terminate — not merely leave the
+        // "active" states — so we never start a second server on top of one
+        // that is still shutting down (and still holding the storage lock).
         let deadline = Date().addingTimeInterval(timeout)
-        while server.status.isActive && Date() < deadline {
+        while server.isRunning && Date() < deadline {
             try? await Task.sleep(nanoseconds: 200_000_000)
         }
     }

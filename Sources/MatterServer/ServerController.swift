@@ -36,6 +36,9 @@ final class ServerController: ObservableObject {
     /// Set while we are deliberately stopping, so the termination handler does
     /// not treat the exit as a crash and restart it.
     private var intentionalStop = false
+    /// Set when a restart was requested; the relaunch happens once the current
+    /// process has fully terminated (see `handleTermination`).
+    private var startAfterStop = false
     private var restartAttempt = 0
     private var pendingRestart: DispatchWorkItem?
     private let backoffSeconds: [Double] = [1, 2, 5, 10, 30, 60]
@@ -47,8 +50,17 @@ final class ServerController: ObservableObject {
 
     // MARK: - Public control
 
+    /// True while a child process handle is alive (running or shutting down).
+    var isRunning: Bool { process != nil }
+
     func start() {
-        guard !status.isActive else { return }
+        // Guard on the actual process handle, not just status: while a process
+        // is `.stopping` it is not "active" but still alive and holding the
+        // storage lock. Spawning a second one here caused the crash loop.
+        guard process == nil else {
+            log.appendSystem("Start ignored: a server process is already running")
+            return
+        }
         pendingRestart?.cancel()
         pendingRestart = nil
 
@@ -74,11 +86,29 @@ final class ServerController: ObservableObject {
 
     func restart() {
         log.appendSystem("Restart requested")
-        stop()
-        // Give the OS a moment to release the port before relaunching.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-            self?.start()
+        if process != nil {
+            // Restart only once the current process has actually terminated
+            // (handled in handleTermination), never on a fixed delay.
+            startAfterStop = true
+            stop()
+        } else {
+            start()
         }
+    }
+
+    /// Synchronously terminate the child before the app exits, so no orphaned
+    /// node process survives to hold the storage lock against the next launch.
+    func terminateNow() {
+        intentionalStop = true
+        startAfterStop = false
+        pendingRestart?.cancel()
+        pendingRestart = nil
+        guard let proc = process, proc.isRunning else { return }
+        let pid = proc.processIdentifier
+        proc.terminate()
+        let deadline = Date().addingTimeInterval(2)
+        while proc.isRunning && Date() < deadline { usleep(50_000) }
+        if proc.isRunning { kill(pid, SIGKILL) }
     }
 
     /// Used by the backup flow: stop for maintenance and report whether the
@@ -184,6 +214,10 @@ final class ServerController: ObservableObject {
         if intentionalStop {
             status = .stopped
             log.appendSystem("Server stopped")
+            if startAfterStop {
+                startAfterStop = false
+                start()
+            }
             return
         }
 

@@ -29,7 +29,7 @@ final class AppEnvironment: ObservableObject {
     }
 
     func shutdown() {
-        server.stop()
+        server.terminateNow()
     }
 }
 
