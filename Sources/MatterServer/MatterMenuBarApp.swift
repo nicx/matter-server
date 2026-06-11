@@ -22,6 +22,36 @@ final class AppEnvironment: ObservableObject {
         self.backup = BackupManager(settings: settings, server: server, log: log)
         self.loginItem = LoginItemManager()
         self.updateChecker = UpdateChecker(settings: settings, log: log)
+        wireOutageEmail()
+    }
+
+    /// Email the user when the server suffers a sustained outage (crash that
+    /// can't recover). Gated on the opt-in toggle + a configured recipient.
+    private func wireOutageEmail() {
+        server.onOutage = { [weak self] reason in
+            guard let self,
+                  self.settings.serverDownEmailEnabled,
+                  !self.settings.updateEmailRecipient.isEmpty else { return }
+            let config = self.settings.mailConfig
+            let recipient = self.settings.updateEmailRecipient
+            Task { @MainActor in
+                do {
+                    try await Mailer.send(
+                        subject: "MatterServer: server is down",
+                        body: """
+                        The matter-server is not running on this Mac.
+
+                        \(reason)
+
+                        Open the MatterServer menu → Show Logs for details.
+                        """,
+                        config: config)
+                    self.log.appendSystem("Server-down alert emailed to \(recipient)")
+                } catch {
+                    self.log.appendSystem("Server-down alert email failed: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     func bootstrap() {

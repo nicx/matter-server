@@ -85,7 +85,7 @@ final class UpdateChecker: ObservableObject {
 
                 To update, re-run Scripts/bundle-runtime.sh and rebuild MatterServer.app.
                 """,
-                config: mailConfig()
+                config: settings.mailConfig
             )
             UserDefaults.standard.set(latest, forKey: lastNotifiedKey)
             log.appendSystem("Update \(latest) available — email sent to \(settings.updateEmailRecipient)")
@@ -103,7 +103,7 @@ final class UpdateChecker: ObservableObject {
             try await Mailer.send(
                 subject: "MatterServer test email",
                 body: "This is a test email from MatterServer, sent via your local mail relay. If you received it, update notifications will work.",
-                config: mailConfig()
+                config: settings.mailConfig
             )
             log.appendSystem("Test email sent to \(settings.updateEmailRecipient)")
             postLocalNotification(title: "Test email sent", body: settings.updateEmailRecipient)
@@ -111,15 +111,6 @@ final class UpdateChecker: ObservableObject {
             lastError = "Email failed: \(error.localizedDescription)"
             log.appendSystem("Test email failed: \(error.localizedDescription)")
         }
-    }
-
-    private func mailConfig() -> Mailer.Config {
-        Mailer.Config(
-            host: settings.smtpHost,
-            port: settings.smtpPort,
-            sender: settings.updateEmailSender,
-            recipient: settings.updateEmailRecipient
-        )
     }
 
     private func postLocalNotification(title: String, body: String) {

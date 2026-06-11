@@ -38,6 +38,8 @@ final class AppSettings: ObservableObject {
 
     /// Email the recipient when a newer matter-server release is available.
     @Published var updateEmailEnabled: Bool { didSet { defaults.set(updateEmailEnabled, forKey: Keys.updateEmailEnabled) } }
+    /// Email when the server crashes and fails to recover (not on manual stop).
+    @Published var serverDownEmailEnabled: Bool { didSet { defaults.set(serverDownEmailEnabled, forKey: Keys.serverDownEmailEnabled) } }
     @Published var updateEmailRecipient: String { didSet { defaults.set(updateEmailRecipient, forKey: Keys.updateEmailRecipient) } }
     @Published var updateEmailSender: String { didSet { defaults.set(updateEmailSender, forKey: Keys.updateEmailSender) } }
     /// Local mail relay (MailRelay) — sends plaintext SMTP, no auth/TLS here.
@@ -62,6 +64,7 @@ final class AppSettings: ObservableObject {
         stopDuringBackup = (defaults.object(forKey: Keys.stopDuringBackup) as? Bool) ?? true
 
         updateEmailEnabled = defaults.bool(forKey: Keys.updateEmailEnabled)
+        serverDownEmailEnabled = defaults.bool(forKey: Keys.serverDownEmailEnabled)
         updateEmailRecipient = defaults.string(forKey: Keys.updateEmailRecipient) ?? ""
         updateEmailSender = defaults.string(forKey: Keys.updateEmailSender) ?? "MatterServer <matterserver@localhost>"
         smtpHost = defaults.string(forKey: Keys.smtpHost) ?? "127.0.0.1"
@@ -71,6 +74,11 @@ final class AppSettings: ObservableObject {
     var storageURL: URL { URL(fileURLWithPath: storagePath, isDirectory: true) }
     var backupURL: URL { URL(fileURLWithPath: backupDirectory, isDirectory: true) }
     var dashboardURL: URL { URL(string: "http://localhost:\(port)")! }
+
+    /// Shared mail configuration for update and server-down notifications.
+    var mailConfig: Mailer.Config {
+        Mailer.Config(host: smtpHost, port: smtpPort, sender: updateEmailSender, recipient: updateEmailRecipient)
+    }
 
     static func defaultSupportDirectory() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -107,6 +115,7 @@ final class AppSettings: ObservableObject {
         static let backupRetention = "backup.retention"
         static let stopDuringBackup = "backup.stopDuring"
         static let updateEmailEnabled = "update.emailEnabled"
+        static let serverDownEmailEnabled = "update.serverDownEmailEnabled"
         static let updateEmailRecipient = "update.emailRecipient"
         static let updateEmailSender = "update.emailSender"
         static let smtpHost = "update.smtpHost"

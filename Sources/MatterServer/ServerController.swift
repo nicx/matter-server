@@ -43,6 +43,13 @@ final class ServerController: ObservableObject {
     private var pendingRestart: DispatchWorkItem?
     private let backoffSeconds: [Double] = [1, 2, 5, 10, 30, 60]
 
+    /// Called once per outage when the server has crashed and failed to recover
+    /// (keepalive threshold reached, or a crash with auto-restart off). Never on
+    /// a manual stop. Reset when the server next runs successfully.
+    var onOutage: ((String) -> Void)?
+    private var notifiedOutage = false
+    private let failureNotifyThreshold = 5
+
     init(settings: AppSettings, log: LogStore) {
         self.settings = settings
         self.log = log
@@ -79,9 +86,10 @@ final class ServerController: ObservableObject {
         }
     }
 
-    /// Stop the server intentionally (no keepalive restart).
+    /// Stop the server intentionally (no keepalive restart, no outage email).
     func stop() {
         intentionalStop = true
+        notifiedOutage = false
         pendingRestart?.cancel()
         pendingRestart = nil
         terminateProcess()
@@ -177,6 +185,7 @@ final class ServerController: ObservableObject {
             self.status = .running
             self.startedAt = Date()
             self.restartAttempt = 0
+            self.notifiedOutage = false // recovered → allow a future outage to notify again
         }
     }
 
@@ -228,7 +237,11 @@ final class ServerController: ObservableObject {
         lastError = reason
         log.appendSystem("Server \(reason)")
 
-        guard settings.autoRestart else { return }
+        guard settings.autoRestart else {
+            // No keepalive: a crash means the server is down now.
+            notifyOutageOnce("matter-server crashed (\(reason)) and auto-restart is disabled.")
+            return
+        }
         scheduleRestart()
     }
 
@@ -236,8 +249,19 @@ final class ServerController: ObservableObject {
         let delay = backoffSeconds[min(restartAttempt, backoffSeconds.count - 1)]
         restartAttempt += 1
         log.appendSystem("Auto-restart in \(Int(delay))s (attempt \(restartAttempt))")
+        if restartAttempt >= failureNotifyThreshold {
+            notifyOutageOnce("matter-server keeps crashing (\(restartAttempt) restart attempts). Last error: \(lastError ?? "unknown").")
+        }
         let work = DispatchWorkItem { [weak self] in self?.start() }
         pendingRestart = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    /// Fire the outage callback at most once until the server recovers.
+    private func notifyOutageOnce(_ reason: String) {
+        guard !notifiedOutage else { return }
+        notifiedOutage = true
+        log.appendSystem("Sustained outage: \(reason)")
+        onOutage?(reason)
     }
 }

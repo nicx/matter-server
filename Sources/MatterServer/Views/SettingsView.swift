@@ -212,6 +212,7 @@ private struct GeneralSettingsTab: View {
 
             Section {
                 Toggle("Email me when an update is available", isOn: $settings.updateEmailEnabled)
+                Toggle("Email me if the server goes down", isOn: $settings.serverDownEmailEnabled)
                 TextField("Recipient", text: $settings.updateEmailRecipient,
                           prompt: Text("you@example.com"))
                     .textContentType(.emailAddress)
@@ -229,9 +230,9 @@ private struct GeneralSettingsTab: View {
                 Button("Send test email") { Task { await updates.sendTestEmail() } }
                     .disabled(settings.updateEmailRecipient.isEmpty)
             } header: {
-                Text("Update email")
+                Text("Email notifications")
             } footer: {
-                Text("Sent via a local SMTP relay (e.g. MailRelay on 127.0.0.1:2525) — no credentials stored here. You are emailed once per new version.")
+                Text("Sent via a local SMTP relay (e.g. MailRelay on 127.0.0.1:2525) — no credentials stored here. Update emails are sent once per new version; outage emails once per crash that can't recover (never on a manual stop).")
             }
         }
         .formStyle(.grouped)
