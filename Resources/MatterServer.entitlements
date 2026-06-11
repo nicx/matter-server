@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Not sandboxed: the app spawns a Node.js child process and reads/writes
+         user-chosen storage and backup folders. -->
+
+    <!-- Required so the hardened runtime allows the bundled Node.js (V8 JIT)
+         to run and load its dynamic libraries. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Matter commissioning relies on link-local multicast/mDNS. This
+         entitlement requires a provisioning profile granted by Apple
+         (request via the Apple Developer portal). Uncomment once approved:
+    <key>com.apple.developer.networking.multicast</key>
+    <true/>
+    -->
+</dict>
+</plist>

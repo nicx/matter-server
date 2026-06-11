@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>MatterServer</string>
+    <key>CFBundleDisplayName</key>
+    <string>MatterServer</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.matterserver.app</string>
+    <key>CFBundleExecutable</key>
+    <string>MatterServer</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Matter Server discovers and commissions Matter devices on your local network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_matter._tcp</string>
+        <string>_matterc._udp</string>
+        <string>_matterd._udp</string>
+    </array>
+</dict>
+</plist>

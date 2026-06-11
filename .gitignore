@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+
+# Build output
+/dist/
+/MatterServerMenu.app/
+
+# Bundled runtime (fetched by Scripts/bundle-runtime.sh)
+/Runtime/
