@@ -179,28 +179,48 @@ private struct GeneralSettingsTab: View {
                 Text(err).font(.caption).foregroundStyle(.red)
             }
 
-            LabeledContent("Installed server version", value: server.detectedVersion ?? "unknown")
+            Section {
+                LabeledContent("matter-server", value: server.detectedVersion ?? "unknown")
+                LabeledContent("matter.js SDK", value: BundledRuntime.matterSdkVersion ?? "unknown")
+                LabeledContent("This app", value: Self.appVersion)
+            } header: {
+                Text("Versions")
+            } footer: {
+                Text("“matter-server” is the matter.js server you run; “matter.js SDK” is the protocol library underneath. Both are independent of this menu-bar app's version.")
+            }
 
             Section("Updates") {
                 HStack {
-                    Button(checking ? "Checking…" : "Check for matter-server Update") {
+                    Button(checking ? "Checking…" : "Check matter-server (npm)") {
                         Task { await checkForUpdate() }
                     }
                     .disabled(checking)
                     Spacer()
                     if let latest = latestVersion {
-                        Text("Latest: \(latest)").font(.caption)
+                        Text(updateStatus(latest))
+                            .font(.caption)
+                            .foregroundStyle(latest == server.detectedVersion ? Color.secondary : Color.orange)
                     }
                 }
                 if let err = checkError {
                     Text(err).font(.caption).foregroundStyle(.red)
                 }
-                Text("Update by re-running Scripts/bundle-runtime.sh and rebuilding the app.")
+                Text("Compares the stable “latest” tag of the matter-server npm package. To update, re-run Scripts/bundle-runtime.sh and rebuild the app.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .onAppear { loginItem.refresh() }
+    }
+
+    private static var appVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
+    }
+
+    private func updateStatus(_ latest: String) -> String {
+        latest == server.detectedVersion
+            ? "Latest: \(latest) — up to date"
+            : "Latest: \(latest) — update available"
     }
 
     private func checkForUpdate() async {

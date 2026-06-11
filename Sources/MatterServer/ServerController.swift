@@ -46,6 +46,9 @@ final class ServerController: ObservableObject {
     init(settings: AppSettings, log: LogStore) {
         self.settings = settings
         self.log = log
+        // The installed matter-server version is read directly from the bundled
+        // package.json, so it's correct immediately (no log scraping needed).
+        self.detectedVersion = BundledRuntime.installedServerVersion
     }
 
     // MARK: - Public control
@@ -187,7 +190,6 @@ final class ServerController: ObservableObject {
             guard let text = String(data: data, encoding: .utf8) else { return }
             Task { @MainActor [weak self] in
                 self?.log.append(text)
-                self?.detectVersion(in: text)
             }
         }
     }
@@ -237,17 +239,5 @@ final class ServerController: ObservableObject {
         let work = DispatchWorkItem { [weak self] in self?.start() }
         pendingRestart = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
-    }
-
-    private func detectVersion(in text: String) {
-        guard detectedVersion == nil else { return }
-        // Best-effort: look for a semver near the word "version" or "matter-server".
-        let pattern = #"(?:matter-server|version)[^0-9]{0,12}(\d+\.\d+\.\d+)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        if let match = regex.firstMatch(in: text, range: range),
-           let r = Range(match.range(at: 1), in: text) {
-            detectedVersion = String(text[r])
-        }
     }
 }
