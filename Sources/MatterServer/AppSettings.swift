@@ -34,6 +34,16 @@ final class AppSettings: ObservableObject {
     /// Stop the server during the snapshot for a consistent backup, then restart it.
     @Published var stopDuringBackup: Bool { didSet { defaults.set(stopDuringBackup, forKey: Keys.stopDuringBackup) } }
 
+    // MARK: Update notifications
+
+    /// Email the recipient when a newer matter-server release is available.
+    @Published var updateEmailEnabled: Bool { didSet { defaults.set(updateEmailEnabled, forKey: Keys.updateEmailEnabled) } }
+    @Published var updateEmailRecipient: String { didSet { defaults.set(updateEmailRecipient, forKey: Keys.updateEmailRecipient) } }
+    @Published var updateEmailSender: String { didSet { defaults.set(updateEmailSender, forKey: Keys.updateEmailSender) } }
+    /// Local mail relay (MailRelay) — sends plaintext SMTP, no auth/TLS here.
+    @Published var smtpHost: String { didSet { defaults.set(smtpHost, forKey: Keys.smtpHost) } }
+    @Published var smtpPort: Int { didSet { defaults.set(smtpPort, forKey: Keys.smtpPort) } }
+
     static let logLevels = ["critical", "error", "warning", "info", "debug", "verbose"]
 
     private init() {
@@ -50,6 +60,12 @@ final class AppSettings: ObservableObject {
         backupMinute = (defaults.object(forKey: Keys.backupMinute) as? Int) ?? 0
         backupRetention = (defaults.object(forKey: Keys.backupRetention) as? Int) ?? 7
         stopDuringBackup = (defaults.object(forKey: Keys.stopDuringBackup) as? Bool) ?? true
+
+        updateEmailEnabled = defaults.bool(forKey: Keys.updateEmailEnabled)
+        updateEmailRecipient = defaults.string(forKey: Keys.updateEmailRecipient) ?? ""
+        updateEmailSender = defaults.string(forKey: Keys.updateEmailSender) ?? "MatterServer <matterserver@localhost>"
+        smtpHost = defaults.string(forKey: Keys.smtpHost) ?? "127.0.0.1"
+        smtpPort = (defaults.object(forKey: Keys.smtpPort) as? Int) ?? 2525
     }
 
     var storageURL: URL { URL(fileURLWithPath: storagePath, isDirectory: true) }
@@ -90,5 +106,10 @@ final class AppSettings: ObservableObject {
         static let backupMinute = "backup.minute"
         static let backupRetention = "backup.retention"
         static let stopDuringBackup = "backup.stopDuring"
+        static let updateEmailEnabled = "update.emailEnabled"
+        static let updateEmailRecipient = "update.emailRecipient"
+        static let updateEmailSender = "update.emailSender"
+        static let smtpHost = "update.smtpHost"
+        static let smtpPort = "update.smtpPort"
     }
 }

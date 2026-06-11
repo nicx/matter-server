@@ -10,6 +10,7 @@ final class AppEnvironment: ObservableObject {
     let server: ServerController
     let backup: BackupManager
     let loginItem: LoginItemManager
+    let updateChecker: UpdateChecker
 
     init() {
         let settings = AppSettings.shared
@@ -20,12 +21,14 @@ final class AppEnvironment: ObservableObject {
         self.server = server
         self.backup = BackupManager(settings: settings, server: server, log: log)
         self.loginItem = LoginItemManager()
+        self.updateChecker = UpdateChecker(settings: settings, log: log)
     }
 
     func bootstrap() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         server.start()
         backup.startScheduling()
+        updateChecker.startScheduling()
     }
 
     func shutdown() {
@@ -70,6 +73,7 @@ struct MatterServerApp: App {
                 .environmentObject(env.server)
                 .environmentObject(env.backup)
                 .environmentObject(env.loginItem)
+                .environmentObject(env.updateChecker)
         }
 
         Window("Matter Server Logs", id: "logs") {

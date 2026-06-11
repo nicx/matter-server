@@ -165,9 +165,8 @@ private struct BackupSettingsTab: View {
 private struct GeneralSettingsTab: View {
     @EnvironmentObject var loginItem: LoginItemManager
     @EnvironmentObject var server: ServerController
-    @State private var latestVersion: String?
-    @State private var checking = false
-    @State private var checkError: String?
+    @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var updates: UpdateChecker
 
     var body: some View {
         Form {
@@ -189,24 +188,50 @@ private struct GeneralSettingsTab: View {
                 Text("“matter-server” is the matter.js server you run; “matter.js SDK” is the protocol library underneath. Both are independent of this menu-bar app's version.")
             }
 
-            Section("Updates") {
+            Section {
                 HStack {
-                    Button(checking ? "Checking…" : "Check matter-server (npm)") {
-                        Task { await checkForUpdate() }
+                    Button(updates.isChecking ? "Checking…" : "Check now") {
+                        Task { await updates.check(notifyByEmail: false) }
                     }
-                    .disabled(checking)
+                    .disabled(updates.isChecking)
                     Spacer()
-                    if let latest = latestVersion {
-                        Text(updateStatus(latest))
+                    if let latest = updates.latestVersion {
+                        Text(updates.updateAvailable ? "Latest: \(latest) — update available" : "Latest: \(latest) — up to date")
                             .font(.caption)
-                            .foregroundStyle(latest == server.detectedVersion ? Color.secondary : Color.orange)
+                            .foregroundStyle(updates.updateAvailable ? Color.orange : Color.secondary)
                     }
                 }
-                if let err = checkError {
+                if let err = updates.lastError {
                     Text(err).font(.caption).foregroundStyle(.red)
                 }
-                Text("Compares the stable “latest” tag of the matter-server npm package. To update, re-run Scripts/bundle-runtime.sh and rebuild the app.")
-                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text("Checks the stable “latest” tag of matter-server on npm once a day. To update, re-run Scripts/bundle-runtime.sh and rebuild the app.")
+            }
+
+            Section {
+                Toggle("Email me when an update is available", isOn: $settings.updateEmailEnabled)
+                TextField("Recipient", text: $settings.updateEmailRecipient,
+                          prompt: Text("you@example.com"))
+                    .textContentType(.emailAddress)
+
+                LabeledContent("Mail relay") {
+                    HStack(spacing: 6) {
+                        TextField("Host", text: $settings.smtpHost).frame(width: 120)
+                        Text(":").foregroundStyle(.secondary)
+                        TextField("Port", value: $settings.smtpPort, format: .number.grouping(.never))
+                            .frame(width: 60)
+                    }
+                }
+                TextField("Sender", text: $settings.updateEmailSender)
+
+                Button("Send test email") { Task { await updates.sendTestEmail() } }
+                    .disabled(settings.updateEmailRecipient.isEmpty)
+            } header: {
+                Text("Update email")
+            } footer: {
+                Text("Sent via a local SMTP relay (e.g. MailRelay on 127.0.0.1:2525) — no credentials stored here. You are emailed once per new version.")
             }
         }
         .formStyle(.grouped)
@@ -215,30 +240,6 @@ private struct GeneralSettingsTab: View {
 
     private static var appVersion: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "—"
-    }
-
-    private func updateStatus(_ latest: String) -> String {
-        latest == server.detectedVersion
-            ? "Latest: \(latest) — up to date"
-            : "Latest: \(latest) — update available"
-    }
-
-    private func checkForUpdate() async {
-        checking = true
-        checkError = nil
-        defer { checking = false }
-        guard let url = URL(string: "https://registry.npmjs.org/matter-server/latest") else { return }
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            if let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let version = obj["version"] as? String {
-                latestVersion = version
-            } else {
-                checkError = "Unexpected response from npm registry"
-            }
-        } catch {
-            checkError = error.localizedDescription
-        }
     }
 }
 
