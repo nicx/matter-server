@@ -101,13 +101,24 @@ final class BackupManager: ObservableObject {
         }
 
         let archive = settings.backupURL.appendingPathComponent(archiveName())
+        // Write to a temporary file first and move it into place only on
+        // success, so an interrupted backup (e.g. the app quitting mid-run)
+        // never leaves a corrupt .zip with the real name.
+        let partial = archive.appendingPathExtension("partial")
+        // Sweep leftover partials from previously interrupted runs.
+        if let leftovers = try? FileManager.default.contentsOfDirectory(at: settings.backupURL, includingPropertiesForKeys: nil) {
+            for f in leftovers where f.pathExtension == "partial" { try? FileManager.default.removeItem(at: f) }
+        }
         log.appendSystem("Backup (\(reason)) → \(archive.lastPathComponent)")
 
         let ok: Bool
         do {
-            try await ditto(["-c", "-k", "--sequesterRsrc", "--keepParent", storage.path, archive.path])
+            try? FileManager.default.removeItem(at: partial)
+            try await ditto(["-c", "-k", "--sequesterRsrc", "--keepParent", storage.path, partial.path])
+            try FileManager.default.moveItem(at: partial, to: archive)
             ok = true
         } catch {
+            try? FileManager.default.removeItem(at: partial)
             fail("Backup failed: \(error.localizedDescription)")
             ok = false
         }
