@@ -120,6 +120,12 @@ enum BundledRuntime {
         if !settings.bluetoothAdapter.isEmpty {
             args += ["--bluetooth-adapter", settings.bluetoothAdapter]
         }
+        // Accept test/development device certificates (non-CSA DACs), e.g. DIY
+        // Tasmota devices. The flag uses commander's preset(true), so passing it
+        // bare enables it.
+        if settings.enableTestNetDcl {
+            args += ["--enable-test-net-dcl"]
+        }
         return args
     }
 

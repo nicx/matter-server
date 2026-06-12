@@ -56,10 +56,12 @@ private struct ServerSettingsTab: View {
 
                 TextField("Bluetooth adapter (HCI id)", text: $settings.bluetoothAdapter,
                           prompt: Text("empty = off — usually N/A on macOS"))
+
+                Toggle("Allow test/development devices", isOn: $settings.enableTestNetDcl)
             } header: {
                 Text("Advanced")
             } footer: {
-                Text("Storage holds the controller's fabric keys, commissioned nodes and certificates. Most users never change this; changing it does not move existing data.")
+                Text("“Allow test/development devices” passes --enable-test-net-dcl so devices with a test/development certificate (e.g. DIY Tasmota) can be commissioned; otherwise device attestation rejects them. Storage holds the controller's fabric keys, commissioned nodes and certificates — changing it does not move existing data.")
             }
 
             Section {

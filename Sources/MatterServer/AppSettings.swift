@@ -20,6 +20,9 @@ final class AppSettings: ObservableObject {
     @Published var bluetoothAdapter: String { didSet { defaults.set(bluetoothAdapter, forKey: Keys.bluetoothAdapter) } }
     @Published var logLevel: String { didSet { defaults.set(logLevel, forKey: Keys.logLevel) } }
     @Published var autoRestart: Bool { didSet { defaults.set(autoRestart, forKey: Keys.autoRestart) } }
+    /// Allow commissioning test/development devices (non-CSA-certified DACs) by
+    /// passing `--enable-test-net-dcl`. Needed for DIY devices (e.g. Tasmota).
+    @Published var enableTestNetDcl: Bool { didSet { defaults.set(enableTestNetDcl, forKey: Keys.enableTestNetDcl) } }
 
     // MARK: Backup
 
@@ -55,6 +58,7 @@ final class AppSettings: ObservableObject {
         bluetoothAdapter = (defaults.string(forKey: Keys.bluetoothAdapter)) ?? ""
         logLevel = (defaults.string(forKey: Keys.logLevel)) ?? "info"
         autoRestart = (defaults.object(forKey: Keys.autoRestart) as? Bool) ?? true
+        enableTestNetDcl = defaults.bool(forKey: Keys.enableTestNetDcl)
 
         backupDirectory = (defaults.string(forKey: Keys.backupDirectory)) ?? AppSettings.defaultBackupDirectory
         backupEnabled = (defaults.object(forKey: Keys.backupEnabled) as? Bool) ?? true
@@ -108,6 +112,7 @@ final class AppSettings: ObservableObject {
         static let bluetoothAdapter = "server.bluetoothAdapter"
         static let logLevel = "server.logLevel"
         static let autoRestart = "server.autoRestart"
+        static let enableTestNetDcl = "server.enableTestNetDcl"
         static let backupDirectory = "backup.directory"
         static let backupEnabled = "backup.enabled"
         static let backupHour = "backup.hour"
