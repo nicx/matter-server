@@ -13,7 +13,10 @@ The app is a thin native supervisor around the server's Node.js process:
   destination folder, daily schedule, retention (keep last *N*), restore, and
   optional "stop server during backup" for a consistent snapshot.
 - **Server settings** in-app: port, storage path, `--primary-interface`,
-  `--bluetooth-adapter`, `--log-level`; plus an npm-registry update check.
+  `--bluetooth-adapter`, `--log-level`.
+- **In-app updates**: a daily npm-registry check plus a one-click
+  "Update matter-server" button that installs the latest release in place
+  (using the bundled npm) and restarts the server — no rebuild needed.
 - **Start at login** via `SMAppService`.
 
 Self-contained: a Node.js runtime and `matter-server` are embedded in the
