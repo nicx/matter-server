@@ -14,6 +14,12 @@ import Foundation
 /// In a packaged `.app` this lives under `Contents/Resources/Runtime`; during
 /// `swift run` we fall back to `<packageRoot>/Runtime`. Both can be overridden
 /// with the `MATTER_NODE_PATH` / `MATTER_SERVER_DIR` environment variables.
+///
+/// `node` (+ bundled `npm`) stay in the signed bundle (immutable). The mutable
+/// `server/` install is seeded on first launch into a WRITABLE copy under
+/// `~/Library/Application Support/MatterServer/runtime/server` so the in-app
+/// updater can `npm install matter-server@latest` there without touching — and
+/// thus invalidating — the code-signed bundle.
 enum BundledRuntime {
 
     enum RuntimeError: LocalizedError {
@@ -57,11 +63,60 @@ enum BundledRuntime {
         return runtimeRoot.appendingPathComponent("node/bin/node")
     }
 
+    /// Read-only `server/` seed shipped inside the bundle (or dev `Runtime/`).
+    /// Used to populate the writable copy on first launch (offline-capable).
+    static var bundledServerSeed: URL {
+        runtimeRoot.appendingPathComponent("server", isDirectory: true)
+    }
+
+    /// `npm` CLI inside the bundled Node runtime, used for in-app updates.
+    /// (Kept by `bundle-runtime.sh`; we invoke it as `node npm-cli.js …`.)
+    static var npmCliURL: URL {
+        runtimeRoot.appendingPathComponent("node/lib/node_modules/npm/bin/npm-cli.js")
+    }
+
+    /// Writable location of the (updatable) `matter-server` install. Lives
+    /// OUTSIDE the code-signed `.app` so in-app `npm install` doesn't break the
+    /// bundle signature — same pattern as the sibling apps' `~/Library/…` payloads.
+    static var writableServerDirectory: URL {
+        // Mirrors AppSettings.defaultSupportDirectory() (…/MatterServer) but
+        // inlined to stay non-isolated (AppSettings is @MainActor).
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent("MatterServer/runtime/server", isDirectory: true)
+    }
+
+    /// The server install the running process uses. Defaults to the writable
+    /// copy; overridable for development via `MATTER_SERVER_DIR`.
     static var serverDirectory: URL {
         if let override = ProcessInfo.processInfo.environment["MATTER_SERVER_DIR"] {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
-        return runtimeRoot.appendingPathComponent("server", isDirectory: true)
+        return writableServerDirectory
+    }
+
+    /// Seed the writable server directory from the bundled seed on first launch
+    /// (so the very first start works offline, before any npm update). Idempotent
+    /// and a no-op when `MATTER_SERVER_DIR` overrides the location.
+    @discardableResult
+    static func ensureServerSeeded() -> Bool {
+        if ProcessInfo.processInfo.environment["MATTER_SERVER_DIR"] != nil { return true }
+        let fm = FileManager.default
+        let dest = writableServerDirectory
+        let installed = dest.appendingPathComponent("node_modules/matter-server/package.json")
+        if fm.fileExists(atPath: installed.path) { return true }
+        let seed = bundledServerSeed
+        guard fm.fileExists(atPath: seed.appendingPathComponent("node_modules/matter-server/package.json").path) else {
+            return false // no seed present; an explicit update/install is required
+        }
+        do {
+            try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+            try fm.copyItem(at: seed, to: dest)
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// Absolute path to the JavaScript file that starts the server.
@@ -98,6 +153,8 @@ enum BundledRuntime {
         guard FileManager.default.isExecutableFile(atPath: node.path) else {
             throw RuntimeError.nodeMissing(node.path)
         }
+        // Populate the writable copy from the bundled seed on first launch.
+        ensureServerSeeded()
         _ = try resolveServerEntry()
     }
 

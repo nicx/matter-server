@@ -21,7 +21,7 @@ final class AppEnvironment: ObservableObject {
         self.server = server
         self.backup = BackupManager(settings: settings, server: server, log: log)
         self.loginItem = LoginItemManager()
-        self.updateChecker = UpdateChecker(settings: settings, log: log)
+        self.updateChecker = UpdateChecker(settings: settings, log: log, server: server)
         wireOutageEmail()
     }
 

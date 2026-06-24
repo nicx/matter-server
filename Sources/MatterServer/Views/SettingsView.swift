@@ -195,7 +195,7 @@ private struct GeneralSettingsTab: View {
                     Button(updates.isChecking ? "Checking…" : "Check now") {
                         Task { await updates.check(notifyByEmail: false) }
                     }
-                    .disabled(updates.isChecking)
+                    .disabled(updates.isChecking || updates.isUpdating)
                     Spacer()
                     if let latest = updates.latestVersion {
                         Text(updates.updateAvailable ? "Latest: \(latest) — update available" : "Latest: \(latest) — up to date")
@@ -203,13 +203,21 @@ private struct GeneralSettingsTab: View {
                             .foregroundStyle(updates.updateAvailable ? Color.orange : Color.secondary)
                     }
                 }
+                Button(updates.isUpdating ? "Updating…" : "Update matter-server") {
+                    Task { await updates.updateMatterServer() }
+                }
+                .disabled(updates.isUpdating || updates.isChecking)
+                if updates.isUpdating {
+                    Text("Installing the latest matter-server — the server will restart when done.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if let err = updates.lastError {
                     Text(err).font(.caption).foregroundStyle(.red)
                 }
             } header: {
                 Text("Updates")
             } footer: {
-                Text("Checks the stable “latest” tag of matter-server on npm once a day. To update, re-run Scripts/bundle-runtime.sh and rebuild the app.")
+                Text("Checks the stable “latest” tag of matter-server on npm once a day. “Update matter-server” installs it in place (into ~/Library/Application Support/MatterServer) using the bundled npm and restarts the server — no rebuild needed.")
             }
 
             Section {

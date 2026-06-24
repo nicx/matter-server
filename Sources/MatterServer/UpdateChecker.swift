@@ -10,15 +10,18 @@ final class UpdateChecker: ObservableObject {
     @Published private(set) var lastChecked: Date?
     @Published private(set) var lastError: String?
     @Published private(set) var isChecking = false
+    @Published private(set) var isUpdating = false
 
     private let settings: AppSettings
     private let log: LogStore
+    private let server: ServerController
     private var timer: Timer?
     private let lastNotifiedKey = "update.lastNotifiedVersion"
 
-    init(settings: AppSettings, log: LogStore) {
+    init(settings: AppSettings, log: LogStore, server: ServerController) {
         self.settings = settings
         self.log = log
+        self.server = server
     }
 
     var installedVersion: String? { BundledRuntime.installedServerVersion }
@@ -83,7 +86,7 @@ final class UpdateChecker: ObservableObject {
                 Installed: \(installed)
                 Latest:    \(latest)
 
-                To update, re-run Scripts/bundle-runtime.sh and rebuild MatterServer.app.
+                Open MatterServer → Settings → Updates and click “Update matter-server”.
                 """,
                 config: settings.mailConfig
             )
@@ -93,6 +96,93 @@ final class UpdateChecker: ObservableObject {
         } catch {
             lastError = "Email failed: \(error.localizedDescription)"
             log.appendSystem("Update-notification email failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - In-app update
+
+    /// Update the bundled `matter-server` to the latest npm release, in place,
+    /// then restart the server. Uses the Node + npm shipped in the (signed)
+    /// bundle to install into the writable copy outside the bundle, so the app's
+    /// code signature stays intact. Mirrors the sibling apps' update buttons.
+    func updateMatterServer() async {
+        guard !isUpdating else { return }
+        isUpdating = true
+        lastError = nil
+        defer { isUpdating = false }
+
+        // Make sure the writable copy exists (seed from the bundle if needed).
+        BundledRuntime.ensureServerSeeded()
+        let node = BundledRuntime.nodeExecutableURL
+        let npm = BundledRuntime.npmCliURL
+        let dest = BundledRuntime.serverDirectory
+
+        guard FileManager.default.isExecutableFile(atPath: node.path),
+              FileManager.default.fileExists(atPath: npm.path) else {
+            lastError = "Bundled npm not found — rebuild the app (Scripts/bundle-runtime.sh now keeps npm)."
+            log.appendSystem("Update failed: bundled npm missing at \(npm.path)")
+            return
+        }
+
+        let target = latestVersion.map { "matter-server@\($0)" } ?? "matter-server@latest"
+        let before = BundledRuntime.installedServerVersion ?? "unknown"
+        log.appendSystem("Updating matter-server (\(before) → \(target)) via bundled npm…")
+
+        let ok = await runNpm(node: node, npm: npm,
+                              args: ["install", target, "--omit=dev",
+                                     "--prefix", dest.path, "--no-audit", "--no-fund"])
+        guard ok else {
+            lastError = "matter-server update failed — see the log window."
+            log.appendSystem("matter-server update failed")
+            return
+        }
+
+        let after = BundledRuntime.installedServerVersion ?? "unknown"
+        log.appendSystem("matter-server updated to \(after) — restarting server")
+        server.restart()
+        // Refresh the "latest" comparison so the UI reflects the new state.
+        await check(notifyByEmail: false)
+    }
+
+    /// Run the bundled `node npm-cli.js …`, streaming output to the log window.
+    /// Returns true on exit code 0.
+    private func runNpm(node: URL, npm: URL, args: [String]) async -> Bool {
+        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            let proc = Process()
+            proc.executableURL = node
+            proc.arguments = [npm.path] + args
+            var env = ProcessInfo.processInfo.environment
+            let nodeBin = node.deletingLastPathComponent().path
+            env["PATH"] = nodeBin + ":" + (env["PATH"] ?? "/usr/bin:/bin")
+            proc.environment = env
+
+            let outPipe = Pipe(), errPipe = Pipe()
+            proc.standardOutput = outPipe
+            proc.standardError = errPipe
+            let stream: @Sendable (FileHandle) -> Void = { [weak self] handle in
+                let data = handle.availableData
+                guard !data.isEmpty else { handle.readabilityHandler = nil; return }
+                guard let text = String(data: data, encoding: .utf8) else { return }
+                Task { @MainActor in self?.log.append(text) }
+            }
+            outPipe.fileHandleForReading.readabilityHandler = stream
+            errPipe.fileHandleForReading.readabilityHandler = stream
+
+            proc.terminationHandler = { p in
+                outPipe.fileHandleForReading.readabilityHandler = nil
+                errPipe.fileHandleForReading.readabilityHandler = nil
+                cont.resume(returning: p.terminationStatus == 0)
+            }
+            do {
+                try FileManager.default.createDirectory(at: BundledRuntime.serverDirectory,
+                                                        withIntermediateDirectories: true)
+                try proc.run()
+            } catch {
+                Task { @MainActor [weak self] in
+                    self?.log.appendSystem("npm launch failed: \(error.localizedDescription)")
+                }
+                cont.resume(returning: false)
+            }
         }
     }
 

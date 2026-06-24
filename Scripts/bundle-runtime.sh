@@ -84,12 +84,13 @@ echo "==> Recording server entry point"
 echo "    entry: $(cat "$RUNTIME/server/.entry")"
 
 echo "==> Slimming runtime (removing build-time-only files)"
-# npm/corepack and C headers are only needed at build time; the app launches
-# `node` directly on the server entry.
+# Keep npm: the app uses the bundled npm for in-app matter-server updates
+# (`node .../npm-cli.js install matter-server@latest` into a writable copy
+# outside the signed .app). corepack/npx and C headers are not needed.
 rm -rf "$RUNTIME/node/include" "$RUNTIME/node/share" \
-       "$RUNTIME/node/lib/node_modules/npm" "$RUNTIME/node/lib/node_modules/corepack" \
+       "$RUNTIME/node/lib/node_modules/corepack" \
        "$RUNTIME/node/CHANGELOG.md" "$RUNTIME/node/README.md"
-rm -f "$RUNTIME/node/bin/npm" "$RUNTIME/node/bin/npx" "$RUNTIME/node/bin/corepack"
+rm -f "$RUNTIME/node/bin/npx" "$RUNTIME/node/bin/corepack"
 # Source maps and TypeScript declarations are not used at runtime.
 find "$RUNTIME/server/node_modules" -type f \
   \( -name '*.map' -o -name '*.d.ts' -o -name '*.d.ts.map' -o -name '*.ts' \) -delete 2>/dev/null || true
