@@ -186,6 +186,10 @@ final class ServerController: ObservableObject {
             self.startedAt = Date()
             self.restartAttempt = 0
             self.notifiedOutage = false // recovered → allow a future outage to notify again
+            // Refresh now that the writable server dir is seeded/updated (the
+            // value read at init may have been nil on first launch, and an
+            // in-app update changes it).
+            self.detectedVersion = BundledRuntime.installedServerVersion
         }
     }
 

@@ -191,13 +191,21 @@ enum BundledRuntime {
     /// Version of the `matter-server` package — i.e. the matter.js-based server
     /// that gets updated via npm. This is what the update check compares against.
     static var installedServerVersion: String? {
-        packageVersion(at: serverDirectory.appendingPathComponent("node_modules/matter-server/package.json"))
+        version(ofPackage: "node_modules/matter-server/package.json")
     }
 
     /// Version of the underlying matter.js SDK (`@matter/*`), distinct from the
     /// server package version.
     static var matterSdkVersion: String? {
-        packageVersion(at: serverDirectory.appendingPathComponent("node_modules/@matter/general/package.json"))
+        version(ofPackage: "node_modules/@matter/general/package.json")
+    }
+
+    /// Read a package version from the writable install, falling back to the
+    /// bundled seed. The fallback matters on first launch, before the writable
+    /// copy has been seeded, so the UI shows the real version immediately.
+    private static func version(ofPackage relativePath: String) -> String? {
+        packageVersion(at: serverDirectory.appendingPathComponent(relativePath))
+            ?? packageVersion(at: bundledServerSeed.appendingPathComponent(relativePath))
     }
 
     private static func packageVersion(at url: URL) -> String? {
