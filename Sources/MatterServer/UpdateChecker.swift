@@ -86,6 +86,8 @@ final class UpdateChecker: ObservableObject {
                 Installed: \(installed)
                 Latest:    \(latest)
 
+                Release notes: \(UpdateChecker.releaseNotesURL(for: latest))
+
                 Open MatterServer → Settings → Updates and click “Update matter-server”.
                 """,
                 config: settings.mailConfig
@@ -209,6 +211,13 @@ final class UpdateChecker: ObservableObject {
         content.body = body
         UNUserNotificationCenter.current().add(
             UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+    }
+
+    /// GitHub release-notes page for a given matter-server version. Tags follow
+    /// the `v<version>` convention (e.g. v1.1.4); the page is the per-version
+    /// changelog upstream publishes for each release.
+    static func releaseNotesURL(for version: String) -> String {
+        "https://github.com/matter-js/matterjs-server/releases/tag/v\(version)"
     }
 
     /// Compare two dotted numeric versions (stable semver). Pre-release/build
