@@ -31,7 +31,7 @@ runtime kills V8 at startup ("Failed to reserve virtual memory for CodeRange").
 - `ServerController.swift` — Node `matter-server` child process lifecycle. Guards
   against duplicate processes (guard on process handle, not status), keepalive
   with backoff, `terminateNow()` on quit, `onOutage` callback after sustained
-  failure.
+  failure, orphan reclaim before every launch (see below).
 - `BundledRuntime.swift` — resolves bundled Node + server entry
   (`dist/esm/MatterServer.js`, **not** a bin), builds CLI args, reads
   `installedServerVersion`/`matterSdkVersion` from package.json.
@@ -49,6 +49,15 @@ runtime kills V8 at startup ("Failed to reserve virtual memory for CodeRange").
   (no plain `--ble`), `--log-level`, `--enable-test-net-dcl`.
 - **Versions are independent**: `matter-server` (the server, e.g. 1.0.0), the
   matter.js SDK `@matter/*` (e.g. 0.17.2), and this app — all shown separately.
+- **An orphan is detected by the port, not by a lock file.** A hard app crash
+  skips `terminateNow()` and leaves a node process holding port 5580; without a
+  handle every keepalive spawns a doomed instance (exit 1) — an endless loop only
+  a reboot cleared in the sibling apps. `ServerController.reclaimOrphanServer`
+  runs before each launch: it probes the port by binding it (`SO_REUSEADDR`, IPv4
+  — that catches Node's dual-stack `::` socket, while a `::` probe would *miss* an
+  IPv4-only one), asks `lsof` for the holder, and signals only if `ps` shows our
+  install + storage path. matter.js's own `matter.lock` is no help here: it
+  self-heals via a PID liveness check, so it never marks a live orphan.
 - Default paths: storage `~/Library/Application Support/MatterServer/storage`,
   backups `…/MatterServer/backups` (configurable), logs `~/Library/Logs/MatterServer/`.
 - App size ~169 MB: ~114 MB Node + matter.js server. `bundle-runtime.sh` strips
