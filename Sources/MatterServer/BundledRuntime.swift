@@ -163,9 +163,17 @@ enum BundledRuntime {
     /// cli.js via commander).
     @MainActor
     static func arguments(for settings: AppSettings) throws -> [String] {
-        // `--enable-source-maps` is a Node flag and must precede the script path
-        // (matches the package's own `npm run server`).
-        var args = ["--enable-source-maps", try resolveServerEntry().path]
+        // Node flags must precede the script path. We deliberately do NOT pass
+        // `--enable-source-maps` (the package's own `npm run server` does): it
+        // keeps every parsed source map resident for the process lifetime, which
+        // cost a few hundred MB here for zero benefit in a long-running daemon.
+        // `--max-old-space-size` caps the V8 old-space heap: on a 16 GB host V8
+        // otherwise sizes the heap generously and never returns it, so the server
+        // crept to ~1 GB RSS for a handful of devices. 384 MB leaves ample head-
+        // room above the live set (storage is ~18 MB) while forcing GC to keep the
+        // footprint near ~500 MB total. Raise it if the server ever OOM-crashes
+        // (look for "JavaScript heap out of memory" in the logs).
+        var args = ["--max-old-space-size=384", try resolveServerEntry().path]
         args += ["--storage-path", settings.storagePath]
         args += ["--log-level", settings.logLevel]
         args += ["--port", String(settings.port)]
