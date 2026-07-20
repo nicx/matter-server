@@ -167,13 +167,14 @@ enum BundledRuntime {
         // `--enable-source-maps` (the package's own `npm run server` does): it
         // keeps every parsed source map resident for the process lifetime, which
         // cost a few hundred MB here for zero benefit in a long-running daemon.
-        // `--max-old-space-size` caps the V8 old-space heap: on a 16 GB host V8
-        // otherwise sizes the heap generously and never returns it, so the server
-        // crept to ~1 GB RSS for a handful of devices. 384 MB leaves ample head-
-        // room above the live set (storage is ~18 MB) while forcing GC to keep the
-        // footprint near ~500 MB total. Raise it if the server ever OOM-crashes
-        // (look for "JavaScript heap out of memory" in the logs).
-        var args = ["--max-old-space-size=384", try resolveServerEntry().path]
+        // `--max-old-space-size` caps the V8 old-space heap so a leak can't grow
+        // unbounded on a 16 GB host. Size it for the *fabric*, not the storage
+        // file: a 384 MB cap looked fine on a fresh start but OOM-crashed this
+        // install (~900 Matter entities) every 10-20 min, and the app's keepalive
+        // respawned it into a crash loop that pinned launchd. matter.js genuinely
+        // needs ~1 GB at this device count, so the cap is a runaway guard, not a
+        // diet. Raise it further if "JavaScript heap out of memory" reappears.
+        var args = ["--max-old-space-size=1024", try resolveServerEntry().path]
         args += ["--storage-path", settings.storagePath]
         args += ["--log-level", settings.logLevel]
         args += ["--port", String(settings.port)]
