@@ -192,6 +192,9 @@ enum BundledRuntime {
         if settings.enableTestNetDcl {
             args += ["--enable-test-net-dcl"]
         }
+        if settings.disableOta {
+            args += ["--disable-ota"]
+        }
         return args
     }
 

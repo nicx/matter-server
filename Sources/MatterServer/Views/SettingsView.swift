@@ -58,10 +58,12 @@ private struct ServerSettingsTab: View {
                           prompt: Text("empty = off — usually N/A on macOS"))
 
                 Toggle("Allow test/development devices", isOn: $settings.enableTestNetDcl)
+
+                Toggle("Disable firmware updates (OTA provider)", isOn: $settings.disableOta)
             } header: {
                 Text("Advanced")
             } footer: {
-                Text("“Allow test/development devices” passes --enable-test-net-dcl so devices with a test/development certificate (e.g. DIY Tasmota) can be commissioned; otherwise device attestation rejects them. Storage holds the controller's fabric keys, commissioned nodes and certificates — changing it does not move existing data.")
+                Text("“Allow test/development devices” passes --enable-test-net-dcl so devices with a test/development certificate (e.g. DIY Tasmota) can be commissioned; otherwise device attestation rejects them. “Disable firmware updates” passes --disable-ota so the server stops pushing firmware to devices — OTA downloads over Thread starve sleepy devices' subscriptions (mass flapping) and some devices loop on an update. Storage holds the controller's fabric keys, commissioned nodes and certificates — changing it does not move existing data.")
             }
 
             Section {

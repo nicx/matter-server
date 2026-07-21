@@ -23,6 +23,10 @@ final class AppSettings: ObservableObject {
     /// Allow commissioning test/development devices (non-CSA-certified DACs) by
     /// passing `--enable-test-net-dcl`. Needed for DIY devices (e.g. Tasmota).
     @Published var enableTestNetDcl: Bool { didSet { defaults.set(enableTestNetDcl, forKey: Keys.enableTestNetDcl) } }
+    /// Turn off the server's OTA provider (`--disable-ota`) so it stops pushing
+    /// firmware updates to devices. OTA downloads over Thread flood sleepy
+    /// devices' subscriptions (mass flapping) and some devices loop on an update.
+    @Published var disableOta: Bool { didSet { defaults.set(disableOta, forKey: Keys.disableOta) } }
 
     // MARK: Backup
 
@@ -59,6 +63,7 @@ final class AppSettings: ObservableObject {
         logLevel = (defaults.string(forKey: Keys.logLevel)) ?? "info"
         autoRestart = (defaults.object(forKey: Keys.autoRestart) as? Bool) ?? true
         enableTestNetDcl = defaults.bool(forKey: Keys.enableTestNetDcl)
+        disableOta = defaults.bool(forKey: Keys.disableOta)
 
         backupDirectory = (defaults.string(forKey: Keys.backupDirectory)) ?? AppSettings.defaultBackupDirectory
         backupEnabled = (defaults.object(forKey: Keys.backupEnabled) as? Bool) ?? true
@@ -113,6 +118,7 @@ final class AppSettings: ObservableObject {
         static let logLevel = "server.logLevel"
         static let autoRestart = "server.autoRestart"
         static let enableTestNetDcl = "server.enableTestNetDcl"
+        static let disableOta = "server.disableOta"
         static let backupDirectory = "backup.directory"
         static let backupEnabled = "backup.enabled"
         static let backupHour = "backup.hour"
