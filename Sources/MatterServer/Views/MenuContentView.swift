@@ -47,9 +47,19 @@ struct MenuContentView: View {
             set: { loginItem.setEnabled($0) }
         ))
 
+        // SettingsLink opens the window but leaves this accessory app inactive, so
+        // the window lands behind whatever the user was working in. Activate on the
+        // next runloop pass, once the window exists, and raise it — same as Logs.
         SettingsLink {
             Text("Settings…")
         }
+        .simultaneousGesture(TapGesture().onEnded {
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.windows.first { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" }?
+                    .makeKeyAndOrderFront(nil)
+            }
+        })
 
         Divider()
 
