@@ -8,6 +8,7 @@ struct MenuContentView: View {
     @EnvironmentObject var backup: BackupManager
     @EnvironmentObject var loginItem: LoginItemManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Text(statusLine)
@@ -47,19 +48,15 @@ struct MenuContentView: View {
             set: { loginItem.setEnabled($0) }
         ))
 
-        // SettingsLink opens the window but leaves this accessory app inactive, so
-        // the window lands behind whatever the user was working in. Activate on the
-        // next runloop pass, once the window exists, and raise it — same as Logs.
-        SettingsLink {
-            Text("Settings…")
+        // Not `SettingsLink`: as an accessory app (LSUIElement) we are not
+        // activated by opening a window, so the settings window would appear
+        // behind whatever the user is looking at — and SettingsLink offers no
+        // hook to activate around it. Activating first, then opening, puts the
+        // window in front of an already-active app (same as "Show Logs…" above).
+        Button("Settings…") {
+            NSApp.activate(ignoringOtherApps: true)
+            openSettings()
         }
-        .simultaneousGesture(TapGesture().onEnded {
-            DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.windows.first { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" }?
-                    .makeKeyAndOrderFront(nil)
-            }
-        })
 
         Divider()
 
