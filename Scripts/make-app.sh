@@ -16,6 +16,19 @@ RUNTIME="$ROOT/Runtime"
 APP="$ROOT/dist/MatterServer.app"
 IDENTITY="${CODESIGN_IDENTITY:--}"
 
+# Läuft die App aus genau diesem dist/, würde der Build ihr das Bundle unter den Füßen
+# weglöschen: der Prozess liefe mit ALTEM Code aus einem gelöschten Bundle weiter, macOS
+# graut ihn aus, das Menü reagiert nicht mehr — beenden ginge nur noch per `kill`. Bei
+# dieser App stoppt ein sauberer Quit zusätzlich den node-Kindprozess (terminateNow).
+# Aus /Applications gestartete Instanzen sind unkritisch.
+RUNNING="$(pgrep -f "$APP/Contents/MacOS/MatterServer" || true)"
+if [[ -n "$RUNNING" ]]; then
+  echo "ABBRUCH: MatterServer läuft gerade aus $ROOT/dist (PID: ${RUNNING//$'\n'/ })." >&2
+  echo "         Der Build würde das laufende Bundle löschen." >&2
+  echo "         Erst die App beenden (Menüleiste -> Beenden), dann erneut bauen." >&2
+  exit 1
+fi
+
 if [[ ! -d "$RUNTIME/node" ]]; then
   echo "error: $RUNTIME/node not found — run Scripts/bundle-runtime.sh first." >&2
   exit 1
