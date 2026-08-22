@@ -100,7 +100,10 @@ final class AvailabilityWatchdog: ObservableObject {
     /// logged, not retried — the restart itself already happened.
     private func notifyRestart(snapshot: AvailabilitySnapshot, sustainedMinutes: Int) async {
         guard settings.watchdogRestartEmailEnabled, !settings.updateEmailRecipient.isEmpty else { return }
-        let ids = snapshot.unavailableNodeIDs.sorted().map(String.init).joined(separator: ", ")
+        let names = HomeAssistantDeviceNames.lookup()
+        let deviceList = snapshot.unavailableNodeIDs.sorted()
+            .map { id in names[id].map { "\($0) (#\(id))" } ?? "#\(id)" }
+            .joined(separator: "\n")
         do {
             try await Mailer.send(
                 subject: "MatterServer: watchdog restarted the server",
@@ -110,7 +113,9 @@ final class AvailabilityWatchdog: ObservableObject {
                 Unavailable: \(snapshot.unavailable) of \(snapshot.total) devices
                 Sustained for: \(sustainedMinutes) min (threshold: \(settings.watchdogUnavailableThreshold) devices for \(settings.watchdogSustainedMinutes) min)
                 Triggered at: \(Self.timestampFormatter.string(from: Date()))
-                Unavailable node IDs: \(ids.isEmpty ? "—" : ids)
+
+                Unavailable devices:
+                \(deviceList.isEmpty ? "—" : deviceList)
 
                 Open MatterServer → Show Logs for the full picture.
                 """,
