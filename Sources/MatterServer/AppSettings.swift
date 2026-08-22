@@ -36,6 +36,9 @@ final class AppSettings: ObservableObject {
     @Published var watchdogUnavailableThreshold: Int { didSet { defaults.set(watchdogUnavailableThreshold, forKey: Keys.watchdogUnavailableThreshold) } }
     /// How long the threshold must stay breached before the watchdog acts.
     @Published var watchdogSustainedMinutes: Int { didSet { defaults.set(watchdogSustainedMinutes, forKey: Keys.watchdogSustainedMinutes) } }
+    /// Email `updateEmailRecipient` (via the same mail relay) whenever the
+    /// watchdog actually restarts the server, with the data that triggered it.
+    @Published var watchdogRestartEmailEnabled: Bool { didSet { defaults.set(watchdogRestartEmailEnabled, forKey: Keys.watchdogRestartEmailEnabled) } }
 
     // MARK: Backup
 
@@ -76,6 +79,7 @@ final class AppSettings: ObservableObject {
         watchdogEnabled = (defaults.object(forKey: Keys.watchdogEnabled) as? Bool) ?? true
         watchdogUnavailableThreshold = (defaults.object(forKey: Keys.watchdogUnavailableThreshold) as? Int) ?? 8
         watchdogSustainedMinutes = (defaults.object(forKey: Keys.watchdogSustainedMinutes) as? Int) ?? 20
+        watchdogRestartEmailEnabled = defaults.bool(forKey: Keys.watchdogRestartEmailEnabled)
 
         backupDirectory = (defaults.string(forKey: Keys.backupDirectory)) ?? AppSettings.defaultBackupDirectory
         backupEnabled = (defaults.object(forKey: Keys.backupEnabled) as? Bool) ?? true
@@ -134,6 +138,7 @@ final class AppSettings: ObservableObject {
         static let watchdogEnabled = "server.watchdogEnabled"
         static let watchdogUnavailableThreshold = "server.watchdogUnavailableThreshold"
         static let watchdogSustainedMinutes = "server.watchdogSustainedMinutes"
+        static let watchdogRestartEmailEnabled = "server.watchdogRestartEmailEnabled"
         static let backupDirectory = "backup.directory"
         static let backupEnabled = "backup.enabled"
         static let backupHour = "backup.hour"

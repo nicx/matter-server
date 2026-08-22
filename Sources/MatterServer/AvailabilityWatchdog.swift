@@ -67,20 +67,21 @@ final class AvailabilityWatchdog: ObservableObject {
         // A failed query (server briefly unreachable, still booting its
         // WebSocket) tells us nothing — leave the degraded streak as-is
         // rather than resetting or acting on it.
-        guard let (unavailable, total) = await queryAvailability() else { return }
-        lastCheck = (unavailable, total)
+        guard let snapshot = await queryAvailability() else { return }
+        lastCheck = (snapshot.unavailable, snapshot.total)
 
-        guard unavailable >= settings.watchdogUnavailableThreshold else {
+        guard snapshot.unavailable >= settings.watchdogUnavailableThreshold else {
             degradedSince = nil
             return
         }
 
         if degradedSince == nil {
             degradedSince = Date()
-            log.appendSystem("Watchdog: \(unavailable)/\(total) nodes unavailable — watching")
+            log.appendSystem("Watchdog: \(snapshot.unavailable)/\(snapshot.total) nodes unavailable — watching")
         }
-        guard let since = degradedSince,
-              Date().timeIntervalSince(since) >= TimeInterval(settings.watchdogSustainedMinutes * 60) else { return }
+        guard let since = degradedSince else { return }
+        let sustained = Date().timeIntervalSince(since)
+        guard sustained >= TimeInterval(settings.watchdogSustainedMinutes * 60) else { return }
 
         if let lastActionAt, Date().timeIntervalSince(lastActionAt) < cooldown {
             return // already logged the degraded state above; stay quiet during cooldown
@@ -88,14 +89,55 @@ final class AvailabilityWatchdog: ObservableObject {
 
         lastActionAt = Date()
         degradedSince = nil
-        log.appendSystem("Watchdog: \(unavailable)/\(total) nodes unavailable for over \(settings.watchdogSustainedMinutes) min — restarting the server")
+        let sustainedMinutes = Int(sustained / 60)
+        log.appendSystem("Watchdog: \(snapshot.unavailable)/\(snapshot.total) nodes unavailable for \(sustainedMinutes) min — restarting the server")
         server.restart()
+        await notifyRestart(snapshot: snapshot, sustainedMinutes: sustainedMinutes)
+    }
+
+    /// Email the trigger data for a watchdog-initiated restart, if the user
+    /// opted in and configured a recipient. Best-effort: a failed send is
+    /// logged, not retried — the restart itself already happened.
+    private func notifyRestart(snapshot: AvailabilitySnapshot, sustainedMinutes: Int) async {
+        guard settings.watchdogRestartEmailEnabled, !settings.updateEmailRecipient.isEmpty else { return }
+        let ids = snapshot.unavailableNodeIDs.sorted().map(String.init).joined(separator: ", ")
+        do {
+            try await Mailer.send(
+                subject: "MatterServer: watchdog restarted the server",
+                body: """
+                The availability watchdog restarted matter-server because too many devices stayed unreachable.
+
+                Unavailable: \(snapshot.unavailable) of \(snapshot.total) devices
+                Sustained for: \(sustainedMinutes) min (threshold: \(settings.watchdogUnavailableThreshold) devices for \(settings.watchdogSustainedMinutes) min)
+                Triggered at: \(Self.timestampFormatter.string(from: Date()))
+                Unavailable node IDs: \(ids.isEmpty ? "—" : ids)
+
+                Open MatterServer → Show Logs for the full picture.
+                """,
+                config: settings.mailConfig)
+            log.appendSystem("Watchdog restart alert emailed to \(settings.updateEmailRecipient)")
+        } catch {
+            log.appendSystem("Watchdog restart alert email failed: \(error.localizedDescription)")
+        }
+    }
+
+    private static let timestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .medium
+        return f
+    }()
+
+    private struct AvailabilitySnapshot {
+        let unavailable: Int
+        let total: Int
+        let unavailableNodeIDs: [Int]
     }
 
     /// One-shot `get_nodes` round trip over the server's own WebSocket API,
     /// matched by `message_id` so it doesn't care what the server pushes
     /// first (a `server_info` handshake on connect, in current versions).
-    private func queryAvailability() async -> (unavailable: Int, total: Int)? {
+    private func queryAvailability() async -> AvailabilitySnapshot? {
         guard let url = URL(string: "ws://127.0.0.1:\(settings.port)/ws") else { return nil }
         let task = URLSession.shared.webSocketTask(with: url)
         task.resume()
@@ -121,8 +163,12 @@ final class AvailabilityWatchdog: ObservableObject {
                   let obj = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
                   obj["message_id"] as? String == "watchdog" else { continue }
             guard let nodes = obj["result"] as? [[String: Any]] else { return nil }
-            let unavailable = nodes.filter { ($0["available"] as? Bool) == false }.count
-            return (unavailable, nodes.count)
+            let unavailableIDs = nodes.compactMap { node -> Int? in
+                guard (node["available"] as? Bool) == false else { return nil }
+                return node["node_id"] as? Int
+            }
+            return AvailabilitySnapshot(unavailable: unavailableIDs.count, total: nodes.count,
+                                         unavailableNodeIDs: unavailableIDs)
         }
     }
 }

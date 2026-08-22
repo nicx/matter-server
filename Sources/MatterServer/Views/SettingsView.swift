@@ -246,6 +246,7 @@ private struct GeneralSettingsTab: View {
             Section {
                 Toggle("Email me when an update is available", isOn: $settings.updateEmailEnabled)
                 Toggle("Email me if the server goes down", isOn: $settings.serverDownEmailEnabled)
+                Toggle("Email me when the watchdog restarts the server", isOn: $settings.watchdogRestartEmailEnabled)
                 TextField("Recipient", text: $settings.updateEmailRecipient,
                           prompt: Text("you@example.com"))
                     .textContentType(.emailAddress)
@@ -265,7 +266,7 @@ private struct GeneralSettingsTab: View {
             } header: {
                 Text("Email notifications")
             } footer: {
-                Text("Sent via a local SMTP relay (e.g. MailRelay on 127.0.0.1:2525) — no credentials stored here. Update emails are sent once per new version; outage emails once per crash that can't recover (never on a manual stop).")
+                Text("Sent via a local SMTP relay (e.g. MailRelay on 127.0.0.1:2525) — no credentials stored here. Update emails are sent once per new version; outage emails once per crash that can't recover (never on a manual stop); watchdog emails once per auto-restart it triggers (see the Resilience section on the Server tab), with the unavailable-device count and IDs that caused it.")
             }
         }
         .formStyle(.grouped)
