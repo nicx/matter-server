@@ -27,6 +27,15 @@ final class AppSettings: ObservableObject {
     /// firmware updates to devices. OTA downloads over Thread flood sleepy
     /// devices' subscriptions (mass flapping) and some devices loop on an update.
     @Published var disableOta: Bool { didSet { defaults.set(disableOta, forKey: Keys.disableOta) } }
+    /// Auto-restart the server when many nodes stay `unavailable` for a
+    /// while — the fix for matter-server getting stuck on stale addresses
+    /// after the Thread mesh reforms (see `AvailabilityWatchdog`).
+    @Published var watchdogEnabled: Bool { didSet { defaults.set(watchdogEnabled, forKey: Keys.watchdogEnabled) } }
+    /// Node count that counts as "many unavailable" — below this, occasional
+    /// sleepy sensors going quiet is normal and ignored.
+    @Published var watchdogUnavailableThreshold: Int { didSet { defaults.set(watchdogUnavailableThreshold, forKey: Keys.watchdogUnavailableThreshold) } }
+    /// How long the threshold must stay breached before the watchdog acts.
+    @Published var watchdogSustainedMinutes: Int { didSet { defaults.set(watchdogSustainedMinutes, forKey: Keys.watchdogSustainedMinutes) } }
 
     // MARK: Backup
 
@@ -64,6 +73,9 @@ final class AppSettings: ObservableObject {
         autoRestart = (defaults.object(forKey: Keys.autoRestart) as? Bool) ?? true
         enableTestNetDcl = defaults.bool(forKey: Keys.enableTestNetDcl)
         disableOta = defaults.bool(forKey: Keys.disableOta)
+        watchdogEnabled = (defaults.object(forKey: Keys.watchdogEnabled) as? Bool) ?? true
+        watchdogUnavailableThreshold = (defaults.object(forKey: Keys.watchdogUnavailableThreshold) as? Int) ?? 8
+        watchdogSustainedMinutes = (defaults.object(forKey: Keys.watchdogSustainedMinutes) as? Int) ?? 20
 
         backupDirectory = (defaults.string(forKey: Keys.backupDirectory)) ?? AppSettings.defaultBackupDirectory
         backupEnabled = (defaults.object(forKey: Keys.backupEnabled) as? Bool) ?? true
@@ -119,6 +131,9 @@ final class AppSettings: ObservableObject {
         static let autoRestart = "server.autoRestart"
         static let enableTestNetDcl = "server.enableTestNetDcl"
         static let disableOta = "server.disableOta"
+        static let watchdogEnabled = "server.watchdogEnabled"
+        static let watchdogUnavailableThreshold = "server.watchdogUnavailableThreshold"
+        static let watchdogSustainedMinutes = "server.watchdogSustainedMinutes"
         static let backupDirectory = "backup.directory"
         static let backupEnabled = "backup.enabled"
         static let backupHour = "backup.hour"

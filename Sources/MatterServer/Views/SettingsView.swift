@@ -21,6 +21,7 @@ struct SettingsView: View {
 private struct ServerSettingsTab: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var server: ServerController
+    @EnvironmentObject var watchdog: AvailabilityWatchdog
 
     var body: some View {
         Form {
@@ -32,6 +33,26 @@ private struct ServerSettingsTab: View {
                 }
 
                 Toggle("Auto-restart on crash", isOn: $settings.autoRestart)
+            }
+
+            Section {
+                Toggle("Auto-restart if many devices stay unreachable", isOn: $settings.watchdogEnabled)
+
+                if settings.watchdogEnabled {
+                    Stepper("After \(settings.watchdogUnavailableThreshold) or more devices unavailable",
+                            value: $settings.watchdogUnavailableThreshold, in: 2...50)
+                    Stepper("…for \(settings.watchdogSustainedMinutes) minutes straight",
+                            value: $settings.watchdogSustainedMinutes, in: 5...120, step: 5)
+                }
+
+                if let last = watchdog.lastCheck {
+                    Text("Last check: \(last.unavailable)/\(last.total) devices unavailable")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Resilience")
+            } footer: {
+                Text("The server can get stuck retrying a device's old IP address after the Thread mesh reforms (an Apple TV/HomePod restart or a power outage, for instance) — Apple Home still reaches the device fine, but the server never re-resolves it. When that many devices stay unavailable that long, restarting the server (same as “Apply & Restart” below) reliably unsticks it.")
             }
 
             Section {

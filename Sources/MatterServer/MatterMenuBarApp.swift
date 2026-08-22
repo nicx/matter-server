@@ -11,6 +11,7 @@ final class AppEnvironment: ObservableObject {
     let backup: BackupManager
     let loginItem: LoginItemManager
     let updateChecker: UpdateChecker
+    let watchdog: AvailabilityWatchdog
 
     init() {
         let settings = AppSettings.shared
@@ -22,6 +23,7 @@ final class AppEnvironment: ObservableObject {
         self.backup = BackupManager(settings: settings, server: server, log: log)
         self.loginItem = LoginItemManager()
         self.updateChecker = UpdateChecker(settings: settings, log: log, server: server)
+        self.watchdog = AvailabilityWatchdog(settings: settings, log: log, server: server)
         wireOutageEmail()
     }
 
@@ -59,9 +61,11 @@ final class AppEnvironment: ObservableObject {
         server.start()
         backup.startScheduling()
         updateChecker.startScheduling()
+        watchdog.startScheduling()
     }
 
     func shutdown() {
+        watchdog.stopScheduling()
         server.terminateNow()
     }
 }
@@ -104,6 +108,7 @@ struct MatterServerApp: App {
                 .environmentObject(env.backup)
                 .environmentObject(env.loginItem)
                 .environmentObject(env.updateChecker)
+                .environmentObject(env.watchdog)
         }
 
         Window("Matter Server Logs", id: "logs") {
