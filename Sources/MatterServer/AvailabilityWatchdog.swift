@@ -28,13 +28,30 @@ final class AvailabilityWatchdog: ObservableObject {
     /// this long before treating a high count as a stall rather than normal
     /// startup churn.
     private let startupGrace: TimeInterval = 5 * 60
-    /// Once we act, stay quiet for this long even if still degraded, so a
-    /// genuinely unstable Thread mesh (not a stale-address stall) doesn't get
-    /// restarted in a tight loop.
-    private let cooldown: TimeInterval = 60 * 60
+    /// Cooldown floor and ceiling. A restart that turns out not to have
+    /// helped doubles the wait before the next attempt (see
+    /// `ineffectiveRestartStreak`); a restart that clearly helped resets it
+    /// back to the floor.
+    private let baseCooldown: TimeInterval = 60 * 60
+    private let maxCooldown: TimeInterval = 24 * 60 * 60
 
     private var degradedSince: Date?
     private var lastActionAt: Date?
+    /// The unavailable node set at the moment of the *last* restart, so the
+    /// next trigger can tell whether that restart actually helped.
+    private var lastActionUnavailableNodeIDs: Set<Int> = []
+    /// Consecutive restarts that left essentially the same nodes unavailable
+    /// — i.e. devices that are genuinely detached from the Thread mesh (need
+    /// a battery pull) rather than matter-server sitting on a stale address.
+    /// Restarting again can never fix that on its own; without this, the
+    /// watchdog would restart the whole fleet every `baseCooldown` forever,
+    /// bothering the other, healthy devices for nothing (seen live overnight
+    /// 2026-08-22→23: 10 restarts, hourly, same ~13 stuck sensors each time).
+    private var ineffectiveRestartStreak = 0
+
+    private var currentCooldown: TimeInterval {
+        min(baseCooldown * pow(2, Double(ineffectiveRestartStreak)), maxCooldown)
+    }
 
     init(settings: AppSettings, log: LogStore, server: ServerController) {
         self.settings = settings
@@ -72,6 +89,9 @@ final class AvailabilityWatchdog: ObservableObject {
 
         guard snapshot.unavailable >= settings.watchdogUnavailableThreshold else {
             degradedSince = nil
+            // Fully recovered — don't let a stale backoff from an unrelated
+            // past incident slow down the response to a future one.
+            ineffectiveRestartStreak = 0
             return
         }
 
@@ -83,27 +103,51 @@ final class AvailabilityWatchdog: ObservableObject {
         let sustained = Date().timeIntervalSince(since)
         guard sustained >= TimeInterval(settings.watchdogSustainedMinutes * 60) else { return }
 
-        if let lastActionAt, Date().timeIntervalSince(lastActionAt) < cooldown {
+        if let lastActionAt, Date().timeIntervalSince(lastActionAt) < currentCooldown {
             return // already logged the degraded state above; stay quiet during cooldown
         }
 
+        // Judge the *previous* restart before committing to this one: if
+        // most of the same nodes are still down, it didn't help — back off
+        // further next time instead of retrying at the same pace forever.
+        let currentIDs = Set(snapshot.unavailableNodeIDs)
+        if lastActionAt != nil, !lastActionUnavailableNodeIDs.isEmpty {
+            let overlap = Double(currentIDs.intersection(lastActionUnavailableNodeIDs).count)
+                / Double(lastActionUnavailableNodeIDs.count)
+            if overlap >= 0.7 {
+                ineffectiveRestartStreak += 1
+                log.appendSystem("Watchdog: last restart didn't help (\(Int(overlap * 100))% of the same devices still unavailable) — these are likely detached from the Thread mesh and need a battery pull, not a restart. Backing off to \(Int(currentCooldown / 3600))h between attempts.")
+            } else {
+                ineffectiveRestartStreak = 0
+            }
+        }
+
         lastActionAt = Date()
+        lastActionUnavailableNodeIDs = currentIDs
         degradedSince = nil
         let sustainedMinutes = Int(sustained / 60)
         log.appendSystem("Watchdog: \(snapshot.unavailable)/\(snapshot.total) nodes unavailable for \(sustainedMinutes) min — restarting the server")
         server.restart()
-        await notifyRestart(snapshot: snapshot, sustainedMinutes: sustainedMinutes)
+        await notifyRestart(snapshot: snapshot, sustainedMinutes: sustainedMinutes, ineffectiveStreak: ineffectiveRestartStreak)
     }
 
     /// Email the trigger data for a watchdog-initiated restart, if the user
     /// opted in and configured a recipient. Best-effort: a failed send is
     /// logged, not retried — the restart itself already happened.
-    private func notifyRestart(snapshot: AvailabilitySnapshot, sustainedMinutes: Int) async {
+    private func notifyRestart(snapshot: AvailabilitySnapshot, sustainedMinutes: Int, ineffectiveStreak: Int) async {
         guard settings.watchdogRestartEmailEnabled, !settings.updateEmailRecipient.isEmpty else { return }
         let names = HomeAssistantDeviceNames.lookup()
         let deviceList = snapshot.unavailableNodeIDs.sorted()
             .map { id in names[id].map { "\($0) (#\(id))" } ?? "#\(id)" }
             .joined(separator: "\n")
+        let streakNote = ineffectiveStreak == 0 ? "" : """
+
+
+        Note: the previous restart(s) did not bring these devices back — \(ineffectiveStreak) in a row now. \
+        That points to devices genuinely detached from the Thread mesh rather than a server-side stall; \
+        a battery pull is likely needed. The watchdog is backing off to \(Int(currentCooldown / 3600))h \
+        between attempts so it stops bothering the rest of the fleet for this.
+        """
         do {
             try await Mailer.send(
                 subject: "MatterServer: watchdog restarted the server",
@@ -115,7 +159,7 @@ final class AvailabilityWatchdog: ObservableObject {
                 Triggered at: \(Self.timestampFormatter.string(from: Date()))
 
                 Unavailable devices:
-                \(deviceList.isEmpty ? "—" : deviceList)
+                \(deviceList.isEmpty ? "—" : deviceList)\(streakNote)
 
                 Open MatterServer → Show Logs for the full picture.
                 """,

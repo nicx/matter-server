@@ -52,7 +52,7 @@ private struct ServerSettingsTab: View {
             } header: {
                 Text("Resilience")
             } footer: {
-                Text("The server can get stuck retrying a device's old IP address after the Thread mesh reforms (an Apple TV/HomePod restart or a power outage, for instance) — Apple Home still reaches the device fine, but the server never re-resolves it. When that many devices stay unavailable that long, restarting the server (same as “Apply & Restart” below) reliably unsticks it.")
+                Text("The server can get stuck retrying a device's old IP address after the Thread mesh reforms (an Apple TV/HomePod restart or a power outage, for instance) — Apple Home still reaches the device fine, but the server never re-resolves it. When that many devices stay unavailable that long, restarting the server (same as “Apply & Restart” below) reliably unsticks it. If a restart doesn't bring the same devices back — a sign they're genuinely detached from the mesh and need a battery pull, not a restart — the watchdog doubles its wait before trying again (up to 24h), so it doesn't keep bothering the rest of the fleet hourly.")
             }
 
             Section {
