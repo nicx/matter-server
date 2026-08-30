@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>de.nicx.thread-route-keeper</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/sbin/thread-route-keeper.sh</string>
+	</array>
+
+	<!-- Every minute. A run that finds the route healthy costs one mDNS
+	     browse and a ping, so this is cheap; a run that repairs it turns an
+	     outage that used to last hours into one that lasts a minute. -->
+	<key>StartInterval</key>
+	<integer>60</integer>
+
+	<!-- Also right after boot: the hand-installed route did not survive
+	     reboots, which is half of why this daemon exists. -->
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>StandardErrorPath</key>
+	<string>/var/log/thread-route-keeper.err</string>
+</dict>
+</plist>

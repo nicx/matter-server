@@ -69,6 +69,25 @@ runtime kills V8 at startup ("Failed to reserve virtual memory for CodeRange").
   `com.apple.developer.networking.multicast` entitlement (Apple-granted;
   documented/commented in `Resources/MatterServer.entitlements`).
 
+## Thread route keeper (separate from the app)
+
+`Scripts/thread-route-keeper.sh` + `Scripts/de.nicx.thread-route-keeper.plist`
+are a root LaunchDaemon, not part of the .app. This Mac reaches Thread devices
+only over a route the border routers announce by RA; when that announcement
+stops being refreshed, macOS expires it and every Thread device goes
+unreachable *from this Mac* while Apple Home — whose hubs sit in the mesh —
+keeps working. Happened repeatedly in Aug 2026. The daemon rediscovers the mesh
+prefix from mDNS every minute (never hardcoded: it has changed six times) and
+reinstalls the route via whichever border router answers.
+
+```bash
+sudo install -m 755 -o root -g wheel Scripts/thread-route-keeper.sh /usr/local/sbin/
+sudo install -m 644 -o root -g wheel Scripts/de.nicx.thread-route-keeper.plist /Library/LaunchDaemons/
+sudo launchctl bootstrap system /Library/LaunchDaemons/de.nicx.thread-route-keeper.plist
+```
+
+Log: `/var/log/thread-route-keeper.log` (only real events; healthy runs stay silent).
+
 ## Working agreements (carried over from prior sessions)
 
 - **Commit & push automatically once a change is safe for this public repo**
