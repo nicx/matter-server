@@ -81,6 +81,7 @@ prefix from mDNS every minute (never hardcoded: it has changed six times) and
 reinstalls the route via whichever border router answers.
 
 ```bash
+sudo mkdir -p /usr/local/sbin   # macOS does not ship this directory
 sudo install -m 755 -o root -g wheel Scripts/thread-route-keeper.sh /usr/local/sbin/
 sudo install -m 644 -o root -g wheel Scripts/de.nicx.thread-route-keeper.plist /Library/LaunchDaemons/
 sudo launchctl bootstrap system /Library/LaunchDaemons/de.nicx.thread-route-keeper.plist
