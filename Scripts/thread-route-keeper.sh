@@ -49,8 +49,14 @@ dns_sd_capture() {
 # directly attached. Those need no gateway, and one of them is the border
 # routers' own on-link prefix — excluding them leaves the mesh prefix.
 onlink_prefixes() {
+    # The scoped form ("fe80::%en9/64") has to be handled too, or link-local
+    # never gets recognised as on-link and can win the vote below.
     netstat -rn -f inet6 2>/dev/null \
-        | awk -v ifc="$IFACE" '$1 ~ /::\/64$/ && $2 ~ /^link#/ && $NF == ifc {sub(/::\/64$/, "", $1); print tolower($1)}'
+        | awk -v ifc="$IFACE" '$2 ~ /^link#/ && $NF == ifc {
+            p = $1
+            sub(/%[^\/]*/, "", p)
+            if (sub(/::\/64$/, "", p)) print tolower(p)
+        }'
 }
 
 # The mesh prefix and one address inside it we can ping, discovered from what
@@ -71,7 +77,11 @@ discover_mesh() {
         host=$(grep -aoE '[0-9A-Fa-f]{12,16}\.local' "$TMP/srv" | head -1)
         [ -z "$host" ] && continue
         dns_sd_capture "$RESOLVE_SECONDS" "$TMP/aaaa" dns-sd -G v6 "$host"
-        grep -a ' Add ' "$TMP/aaaa" | awk '{print $6}' | sed 's/%.*//' >> "$TMP/addrs"
+        # Devices also publish their link-local address. It is never the mesh
+        # prefix and, being reachable from nowhere via a gateway, would send
+        # the repair loop chasing fe80::/64 forever.
+        grep -a ' Add ' "$TMP/aaaa" | awk '{print $6}' | sed 's/%.*//' \
+            | grep -viE '^fe[89ab]' >> "$TMP/addrs"
     done
     [ -s "$TMP/addrs" ] || return 1
 
