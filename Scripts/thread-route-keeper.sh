@@ -24,8 +24,14 @@ set -u
 
 IFACE="${THREAD_ROUTE_IFACE:-en9}"
 LOG="${THREAD_ROUTE_LOG:-/var/log/thread-route-keeper.log}"
+# Remembers the mesh prefix and when each border router was last seen, so a
+# prefix change can be attributed to whichever router vanished.
+STATE_DIR="${THREAD_ROUTE_STATE:-/var/db/thread-route-keeper}"
 BROWSE_SECONDS=4
 RESOLVE_SECONDS=3
+# A router seen in the previous run is at most one interval old; anything older
+# than that plus slack was already gone when this run started.
+BR_PRESENT_MAX_AGE=90
 # How many advertised Matter services to resolve. Only enough to out-vote the
 # handful of Matter-over-WiFi devices, whose addresses sit on the LAN prefix.
 SAMPLE_INSTANCES=4
@@ -123,11 +129,88 @@ reachable() {
     ping6 -c 2 "$1" > /dev/null 2>&1
 }
 
+# --- Border router census -----------------------------------------------
+#
+# The mesh prefix is not handed out by the LAN router: every border router
+# brings its own candidate and the mesh agrees on one winner. When that winner
+# leaves — an Apple TV rebooted, a camera dropped off Wi-Fi — the next router's
+# prefix takes over and every Thread device is renumbered. Knowing *who was
+# missing at that moment* is the only way to tell which router keeps causing it,
+# and the matter-server stopped logging its own BR drops in Aug 2026, so record
+# it here: cheap, because this script already runs every minute.
+
+# Names of the border routers currently announcing themselves over mDNS.
+current_border_routers() {
+    dns_sd_capture "$BROWSE_SECONDS" "$TMP/meshcop" dns-sd -B _meshcop._udp local.
+    # "<time> Add <flags> <if> <domain> <type> <instance name>" — the name is
+    # everything after the sixth field and may well contain spaces.
+    grep -a ' Add ' "$TMP/meshcop" \
+        | awk '{ for (i = 1; i <= 6; i++) $i = ""; sub(/^ +/, ""); if ($0 != "") print }' \
+        | sort -u
+}
+
+# Merge the current sighting into the remembered last-seen times: routers seen
+# now get this timestamp, routers only remembered keep theirs. Prints the merged
+# state (one "<epoch>|<name>" per line).
+merged_border_router_state() {
+    local now="$1" current="$2"
+    mkdir -p "$STATE_DIR" 2>/dev/null
+    [ -f "$STATE_DIR/border-routers" ] || : > "$STATE_DIR/border-routers"
+    awk -v now="$now" '
+        FNR == NR { seen[$0] = 1; next }
+        {
+            i = index($0, "|")
+            if (i > 1 && !(substr($0, i + 1) in seen)) print
+        }
+        END { for (n in seen) print now "|" n }
+    ' "$current" "$STATE_DIR/border-routers" 2>/dev/null
+}
+
+# One line naming who is here and who is gone, for the prefix-change log entry.
+border_router_report() {
+    local now="$1" state="$2"
+    awk -v now="$now" -v maxage="$BR_PRESENT_MAX_AGE" -F'|' '
+        {
+            age = now - $1
+            if (age <= maxage) {
+                present = present (present ? ", " : "") $2
+            } else {
+                mins = int(age / 60)
+                dur = (mins < 120) ? mins "m" : int(mins / 60) "h"
+                absent = absent (absent ? ", " : "") $2 " (gone " dur ")"
+            }
+        }
+        END {
+            printf "present: %s", (present ? present : "none")
+            if (absent) printf " — missing: %s", absent
+        }
+    ' "$state"
+}
+
 main() {
     local discovered prefix probe
     discovered=$(discover_mesh) || { log "no Matter services advertised — nothing to do"; exit 0; }
     prefix=$(echo "$discovered" | awk '{print $1}')
     probe=$(echo "$discovered" | awk '{print $2}')
+
+    # Take the census before anything else, and log a prefix change even when
+    # the route still works: the change is the event worth studying, and it does
+    # not always break routing (macOS sometimes learns the new prefix by itself).
+    local now state last
+    now=$(date +%s)
+    current_border_routers > "$TMP/brs"
+    state=$(merged_border_router_state "$now" "$TMP/brs")
+    last=""
+    [ -f "$STATE_DIR/prefix" ] && last=$(cat "$STATE_DIR/prefix")
+    if [ "$prefix" != "$last" ]; then
+        printf '%s\n' "$state" | grep -v '^$' > "$TMP/state"
+        if [ -n "$last" ]; then
+            log "mesh prefix changed: $last::/64 -> $prefix::/64 — border routers $(border_router_report "$now" "$TMP/state")"
+        fi
+        mkdir -p "$STATE_DIR" 2>/dev/null
+        printf '%s\n' "$prefix" > "$STATE_DIR/prefix"
+    fi
+    printf '%s\n' "$state" | grep -v '^$' > "$STATE_DIR/border-routers"
 
     # The common case: the route the border routers announced is there and
     # works. Say nothing, so the log only ever holds real events.

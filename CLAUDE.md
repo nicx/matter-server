@@ -87,6 +87,14 @@ sudo install -m 644 -o root -g wheel Scripts/de.nicx.thread-route-keeper.plist /
 sudo launchctl bootstrap system /Library/LaunchDaemons/de.nicx.thread-route-keeper.plist
 ```
 
+It also keeps a census of the border routers (`dns-sd -B _meshcop._udp`) in
+`/var/db/thread-route-keeper/`: the last-seen time per router plus the current
+prefix. Every prefix change is logged with who was announcing and who had gone
+missing — the winner's disappearance is what renumbers the whole mesh, and the
+matter-server stopped logging its own `BR instance dropped` lines in Aug 2026.
+A change is logged even when routing survives it (macOS sometimes learns the new
+prefix on its own, so those changes were previously invisible).
+
 Log: `/var/log/thread-route-keeper.log` (only real events; healthy runs stay silent).
 
 ## Working agreements (carried over from prior sessions)
