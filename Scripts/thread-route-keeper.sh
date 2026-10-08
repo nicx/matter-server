@@ -224,7 +224,10 @@ main() {
     # already installed first, if any: when it works again after a blip, that
     # avoids pointlessly moving the route somewhere else.
     local current candidates gw
-    current=$(netstat -rn -f inet6 2>/dev/null | awk -v p="$prefix::/64" '$1 == p {print $2}' | head -1)
+    # Only a route on our own interface counts. With Wi-Fi switched on (a macOS
+    # update turned it back on once), the installed route can sit on en1 — and
+    # trying that gateway first would keep the route on the wrong link.
+    current=$(netstat -rn -f inet6 2>/dev/null | awk -v p="$prefix::/64" -v ifc="$IFACE" '$1 == p && $NF == ifc {print $2}' | head -1)
     candidates=$(ndp -rn 2>/dev/null | awk -v ifc="%$IFACE" '$1 ~ ifc {print $1}')
     [ -n "$current" ] && candidates="$current $(echo "$candidates" | grep -vFx "$current")"
     [ -z "$candidates" ] && { log "no border routers are advertising — giving up this round"; exit 0; }
