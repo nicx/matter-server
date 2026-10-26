@@ -32,6 +32,9 @@ RESOLVE_SECONDS=3
 # A router seen in the previous run is at most one interval old; anything older
 # than that plus slack was already gone when this run started.
 BR_PRESENT_MAX_AGE=90
+# Forget routers not seen for this long, so a renamed one (the Aqara camera
+# changed its mDNS name after an update) does not read as "missing" forever.
+BR_FORGET_AFTER=604800
 # How many advertised Matter services to resolve. Only enough to out-vote the
 # handful of Matter-over-WiFi devices, whose addresses sit on the LAN prefix.
 SAMPLE_INSTANCES=4
@@ -156,14 +159,27 @@ merged_border_router_state() {
     local now="$1" current="$2"
     mkdir -p "$STATE_DIR" 2>/dev/null
     [ -f "$STATE_DIR/border-routers" ] || : > "$STATE_DIR/border-routers"
-    awk -v now="$now" '
-        FNR == NR { seen[$0] = 1; next }
+    # A browse that saw nothing (an mDNS hiccup) says nothing about who is gone;
+    # keep what we know instead of reading it as "everybody left".
+    if [ ! -s "$current" ]; then
+        awk -F'|' 'NF == 2' "$STATE_DIR/border-routers"
+        return 0
+    fi
+    # Telling the two files apart by FILENAME, not by the usual FNR == NR: with
+    # an empty first file that test also holds for the second one, which turned
+    # every remembered line into a "currently seen" name and re-stamped it —
+    # "<now>|<old epoch>|<name>" entries piled up and showed in the log as
+    # routers that had been gone for days. Such malformed lines are dropped here
+    # too, so a state file already damaged that way heals itself.
+    awk -v now="$now" -v cur="$current" -v forget="$BR_FORGET_AFTER" '
+        FILENAME == cur { seen[$0] = 1; next }
         {
             i = index($0, "|")
-            if (i > 1 && !(substr($0, i + 1) in seen)) print
+            if (i > 1 && $0 !~ /\|.*\|/ && !(substr($0, i + 1) in seen) \
+                && now - substr($0, 1, i - 1) <= forget) print
         }
         END { for (n in seen) print now "|" n }
-    ' "$current" "$STATE_DIR/border-routers" 2>/dev/null
+    ' "$current" "$STATE_DIR/border-routers"
 }
 
 # One line naming who is here and who is gone, for the prefix-change log entry.
